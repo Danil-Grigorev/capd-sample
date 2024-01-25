@@ -17,8 +17,7 @@ use crate::{
         dockerclusters::DockerCluster,
         dockermachines::DockerMachine,
         machines::Machine,
-    },
-    Context, Error, Result, CLUSTER_NAME_LABEL,
+    }, docker::docker, Context, Error, Result, CLUSTER_NAME_LABEL
 };
 
 impl Machine {
@@ -130,65 +129,6 @@ impl Cluster {
     }
 }
 
-// fn ip_family_for_cidrstrings(cidr_strings: Vec<String>) -> Option<ClusterIPFamily> {
-//     let family = Some(ClusterIPFamily::IPv4IPFamily);
-//     for cidr_string in cidr_strings {
-//         family = match family {
-//             Some(family) => match family {
-//                 ClusterIPFamily::IPv4IPFamily => net::Ipv4Addr::from_str(&cidr_string)
-//                     .or(net::Ipv6Addr::from_str(&cidr_string)
-//                         .and_then(|_| Some(ClusterIPFamily::IPv6IPFamily))),
-//                 ClusterIPFamily::IPv6IPFamily => net::Ipv6Addr::from_str(&cidr_string).and_then(|_| ),
-//                 ClusterIPFamily::DualStackIPFamily => todo!(),
-//             },
-//             None => None,
-//             // ClusterIPFamily::IPv4IPFamily => net::Ipv4Addr::from_str(&cidrString).ok(),
-//             // ClusterIPFamily::IPv6IPFamily => todo!(),
-//             // ClusterIPFamily::DualStackIPFamily => todo!(),
-//         };
-//         // net::Ipv4Addr::from_str(&cidrString)
-//     }
-// }
-
-// func (c *Cluster) GetIPFamily() (ClusterIPFamily, error) {
-// 	var podCIDRs, serviceCIDRs []string
-// 	if c.Spec.ClusterNetwork != nil {
-// 		if c.Spec.ClusterNetwork.Pods != nil {
-// 			podCIDRs = c.Spec.ClusterNetwork.Pods.CIDRBlocks
-// 		}
-// 		if c.Spec.ClusterNetwork.Services != nil {
-// 			serviceCIDRs = c.Spec.ClusterNetwork.Services.CIDRBlocks
-// 		}
-// 	}
-// 	if len(podCIDRs) == 0 && len(serviceCIDRs) == 0 {
-// 		return IPv4IPFamily, nil
-// 	}
-
-// 	podsIPFamily, err := ipFamilyForCIDRStrings(podCIDRs)
-// 	if err != nil {
-// 		return InvalidIPFamily, fmt.Errorf("pods: %s", err)
-// 	}
-// 	if len(serviceCIDRs) == 0 {
-// 		return podsIPFamily, nil
-// 	}
-
-// 	servicesIPFamily, err := ipFamilyForCIDRStrings(serviceCIDRs)
-// 	if err != nil {
-// 		return InvalidIPFamily, fmt.Errorf("services: %s", err)
-// 	}
-// 	if len(podCIDRs) == 0 {
-// 		return servicesIPFamily, nil
-// 	}
-
-// 	if podsIPFamily == DualStackIPFamily {
-// 		return DualStackIPFamily, nil
-// 	} else if podsIPFamily != servicesIPFamily {
-// 		return InvalidIPFamily, errors.New("pods and services IP family mismatch")
-// 	}
-
-// 	return podsIPFamily, nil
-// }
-
 impl DockerMachine {
     pub async fn get_owner(&self, ctx: Arc<Context>) -> Result<Option<Machine>> {
         let name = self
@@ -227,6 +167,9 @@ impl DockerMachine {
                 return Ok(Action::requeue(Duration::from_secs(5 * 60)));
             }
         };
+
+
+        docker::Machine::get_container().await?;
 
         Ok(Action::requeue(Duration::from_secs(5 * 60)))
     }

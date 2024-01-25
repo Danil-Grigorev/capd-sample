@@ -22,6 +22,12 @@ pub enum Error {
     #[error("IP family unknown: {0}")]
     IPFamilyUnknown(#[source] std::net::AddrParseError),
 
+    #[error("CRI error: {0}")]
+    ContainerError(#[source] docker_api::Error),
+
+    #[error("Expected to find matching container")]
+    ContainerLookupError,
+
     #[error("IllegalDocument")]
     IllegalDocument,
 }
@@ -34,6 +40,10 @@ impl Error {
 }
 
 const CLUSTER_NAME_LABEL: &str = "cluster.x-k8s.io/cluster-name";
+const CLUSTER_LABEL_KEY: &str = "io.x-k8s.kind.cluster";
+const NODE_ROLE_LABEL_KEY: &str = "io.x-k8s.kind.role";
+const FILTER_LABEL: &str = "label";
+const FILTER_NAME: &str = "name";
 
 pub mod api;
 /// Expose all controller components used by main
