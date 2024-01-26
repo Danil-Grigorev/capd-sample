@@ -28,6 +28,9 @@ pub enum Error {
     #[error("Expected to find matching container")]
     ContainerLookupError,
 
+    #[error("Expected to create container: {0}")]
+    ContainerCreateError(#[source] docker_api::Error),
+
     #[error("IllegalDocument")]
     IllegalDocument,
 }

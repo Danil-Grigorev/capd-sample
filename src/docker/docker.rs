@@ -1,19 +1,22 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use docker_api::{
     models::ContainerSummary,
-    opts::{ContainerFilter, ContainerListOpts},
+    opts::{ContainerCreateOpts, ContainerCreateOptsBuilder, ContainerFilter, ContainerListOpts},
+    Container,
 };
 use kube_core::ResourceExt;
+use tracing::info;
 
 use crate::{
-    api::cluster::Cluster, controllers::docker::ClusterIPFamily, Context, Error, Result,
-    CLUSTER_LABEL_KEY,
+    api::{cluster::Cluster, machines::Machine},
+    controllers::docker::ClusterIPFamily,
+    Error, Result, CLUSTER_LABEL_KEY,
 };
 
 // Node can be thought of as a logical component of Kubernetes.
 // A node is either a control plane node, a worker node, or a load balancer node.
-struct Node {
+pub struct Node {
     name: Option<String>,
     cluster_role: Option<String>,
     internal_ip: Option<String>,
@@ -22,48 +25,45 @@ struct Node {
     // Commander:   *ContainerCmder
 }
 
-// Machine implement a service for managing the docker containers hosting a kubernetes nodes.
-pub struct Machine {
-    cluster: String,
-    machine: String,
-    pod_ips: ClusterIPFamily,
-    service_ips: ClusterIPFamily,
+// Association implement a service for managing the docker containers hosting a kubernetes nodes.
+pub struct Association {
+    pub cluster: Cluster,
+    pub machine: Machine,
+    // pod_ips: ClusterIPFamily,
+    // service_ips: ClusterIPFamily,
     container: Node,
     // nodeCreator nodeCreator
 }
 
-impl Machine {
+impl Association {
     pub async fn new(
-        ctx: Arc<Context>,
         cluster: Cluster,
-        machine: String,
+        machine: Machine,
         labels: HashMap<String, String>,
-    ) -> Result<Machine> {
+    ) -> Result<Association> {
         let filters = vec![
             ContainerFilter::Label(CLUSTER_LABEL_KEY.to_string(), cluster.name_any()),
-            ContainerFilter::LabelKey(format!("^{}-{machine}$", cluster.name_any())),
+            // ContainerFilter::LabelKey(format!("^{}-{}$", cluster.name_any(), machine.name_any())),
         ]
-        .into_iter()
-        .chain(
-            labels
-                .into_iter()
-                .map(|(k, v)| ContainerFilter::Label(k, v)),
-        );
+        .into_iter();
+        // .chain(
+        //     labels
+        //         .into_iter()
+        //         .map(|(k, v)| ContainerFilter::Label(k, v)),
+        // );
 
-        // let _container = getContainer(ctx, filters)?;
-
-        Ok(Machine {
+        Ok(Association {
             machine,
-            container: Machine::get_container(filters.collect()).await?,
-            cluster: cluster.name_any(),
-            pod_ips: cluster.get_pod_ip_family()?,
-            service_ips: cluster.get_services_ip_family()?,
+            container: Association::get_container(filters.collect()).await?,
+            cluster: cluster.clone(),
+            // pod_ips: cluster.get_pod_ip_family()?,
+            // service_ips: cluster.get_services_ip_family()?,
             // nodeCreator: &Manager{},
         })
     }
 
     pub async fn get_container(filters: Vec<ContainerFilter>) -> Result<Node> {
-        let container_list = Machine::list_containers(filters).await?;
+        let container_list = Association::list_containers(filters).await?;
         let container = container_list
             .first()
             .ok_or(Error::ContainerLookupError)?
@@ -89,5 +89,17 @@ impl Machine {
             .list(&ContainerListOpts::builder().filter(filters).build())
             .await
             .map_err(Error::ContainerError)
+    }
+
+    pub async fn create_container(&self) -> Result<Container> {
+        let image = "kindest/node:v1.26.3";
+        let api = docker_api::Docker::new("unix:///var/run/docker.sock")
+            .map_err(Error::ContainerError)?;
+        let container = api.containers()
+            .create(&ContainerCreateOptsBuilder::default().name("test").image(image).build())
+            .await
+            .map_err(Error::ContainerCreateError)?;
+        info!("{container:?}");
+        Ok(container)
     }
 }

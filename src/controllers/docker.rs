@@ -12,12 +12,14 @@ use crate::{
     api::{
         cluster::{
             self, Cluster, ClusterClusterNetwork, ClusterClusterNetworkPods,
-            ClusterClusterNetworkServices, ClusterInfrastructureRef,
+            ClusterClusterNetworkServices, ClusterInfrastructureRef, ClusterStatus,
         },
         dockerclusters::DockerCluster,
-        dockermachines::DockerMachine,
+        dockermachines::{DockerMachine, DockerMachineStatus},
         machines::Machine,
-    }, docker::docker, Context, Error, Result, CLUSTER_NAME_LABEL
+    },
+    docker::docker::{self, Association},
+    Context, Error, Result, CLUSTER_NAME_LABEL,
 };
 
 impl Machine {
@@ -168,8 +170,53 @@ impl DockerMachine {
             }
         };
 
+        self.reconcile_normal(Association::new(cluster, machine, Default::default()).await?)
+            .await?;
 
-        docker::Machine::get_container().await?;
+        Ok(Action::requeue(Duration::from_secs(5 * 60)))
+    }
+
+    pub async fn reconcile_normal(&self, association: Association) -> Result<Action> {
+        let mut status = self.status.clone().unwrap();
+
+        // Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
+        match association.cluster {
+            Cluster {
+                status:
+                    Some(ClusterStatus {
+                        infrastructure_ready: Some(true),
+                        ..
+                    }),
+                ..
+            } => (),
+            _ => {
+                info!("Waiting for DockerCluster Controller to create cluster infrastructure");
+                // 	conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
+                return Ok(Action::requeue(Duration::from_secs(5 * 60)));
+            }
+        }
+
+        match self.spec.provider_id.clone() {
+            Some(_) => status.ready = Some(true),
+            None => (),
+        }
+
+        match association.machine.spec.bootstrap.data_secret_name {
+            None => {
+                // // if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
+                //     log.Info("Waiting for the control plane to be initialized")
+                //     conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
+                //     return ctrl.Result{}, nil
+                // }
+
+                // log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+                // conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
+            }
+            _ => (),
+        }
+
+        association.create_container().await?;
+        info!("done");
 
         Ok(Action::requeue(Duration::from_secs(5 * 60)))
     }
