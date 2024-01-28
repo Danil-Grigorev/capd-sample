@@ -1,11 +1,11 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, net::TcpListener};
 
 use docker_api::opts::ContainerFilter;
 use kube_core::ResourceExt;
 
 use crate::{
     api::{cluster::Cluster, machines::Machine},
-    Result, CLUSTER_LABEL_KEY, DEFAULT_DOCKER_SOCKET, DEFAULT_IMAGE, DEFAULT_VERSION,
+    Error, Result, CLUSTER_LABEL_KEY, DEFAULT_DOCKER_SOCKET, DEFAULT_IMAGE, DEFAULT_VERSION,
     HASH_LABEL_KEY, MACHINE_CONTROL_PLANE_LABEL, NODE_ROLE_LABEL_KEY,
 };
 
@@ -93,7 +93,7 @@ impl MachineRole {
             MachineRole::Worker(association) | MachineRole::ControlPlane(association) => {
                 let container = association
                     .runtime
-                    .create_container(self.create_input())
+                    .create_container(self.create_input()?)
                     .await?;
 
                 association
@@ -104,24 +104,28 @@ impl MachineRole {
         }
     }
 
-    fn create_input(&self) -> RunContainerInput {
-        match self {
+    fn create_input(&self) -> Result<RunContainerInput> {
+        Ok(match self {
             MachineRole::Worker(association) => RunContainerInput {
                 image: association.get_image(),
                 labels: self.get_labels(),
                 ..self.base_create()
             },
-            MachineRole::ControlPlane(association) => RunContainerInput {
-                image: association.get_image(),
-                labels: self.get_labels(),
-                port_mappings: vec![PortMapping {
-                    container_port: 6443,
-                    host_port: 9443,
-                    protocol: "tcp".to_string(),
-                }],
-                ..self.base_create()
-            },
-        }
+            MachineRole::ControlPlane(association) => {
+                let socket = TcpListener::bind("127.0.0.1:0").unwrap();
+                let addr = socket.local_addr().map_err(Error::PortLookupError)?;
+                RunContainerInput {
+                    image: association.get_image(),
+                    labels: self.get_labels(),
+                    port_mappings: vec![PortMapping {
+                        container_port: 6443,
+                        host_port: addr.port(),
+                        protocol: "tcp".to_string(),
+                    }],
+                    ..self.base_create()
+                }
+            }
+        })
     }
 
     fn base_create(&self) -> RunContainerInput {
@@ -224,35 +228,34 @@ impl Association {
         vec![
             // some k8s things want to read /lib/modules
             Mount {
-                source: "/lib/modules".into(),
+                source: Some("/lib/modules".into()),
                 target: "/lib/modules".into(),
                 read_only: true,
             },
             Mount {
-                source: DEFAULT_DOCKER_SOCKET.into(),
+                source: Some(DEFAULT_DOCKER_SOCKET.into()),
                 target: DEFAULT_DOCKER_SOCKET.into(),
                 read_only: false,
             },
-            // TODO: Unfortunately it's impossible to pass volumes without target
             // runtime persistent storage
             // this ensures that E.G. pods, logs etc. are not on the container
             // filesystem, which is not only better for performance
-            // Mount {
-            //     source: "/var".to_string(),
-            //     target: "".to_string(),
-            //     read_only: false,
-            // },
+            Mount {
+                source: None,
+                target: "/var".to_string(),
+                read_only: false,
+            },
             // tmpfs
-            // Mount {
-            //     source: "/tmp".to_string(),
-            //     target: "".to_string(),
-            //     read_only: false,
-            // },
-            // Mount {
-            //     source: "/run".to_string(),
-            //     target: "".to_string(),
-            //     read_only: false,
-            // },
+            Mount {
+                source: None,
+                target: "/tmp".to_string(),
+                read_only: false,
+            },
+            Mount {
+                source: None,
+                target: "/run".to_string(),
+                read_only: false,
+            },
         ]
     }
 }

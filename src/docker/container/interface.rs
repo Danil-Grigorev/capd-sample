@@ -83,7 +83,7 @@ impl From<RunContainerInput> for ContainerCreateOpts {
 
         // todo: validate network
         for port_mapping in input.port_mappings {
-            builder = builder.expose(port_mapping.publish_port(), port_mapping.host_port);
+            builder = builder.expose(port_mapping.publish_port(), port_mapping.host_port as u32);
         }
 
         if !input.mounts.is_empty() {
@@ -99,7 +99,7 @@ impl From<RunContainerInput> for ContainerCreateOpts {
 #[derive(Debug, Clone, Default, Serialize, Hash)]
 pub struct Mount {
     // Source is the source host path to mount.
-    pub source: String,
+    pub source: Option<String>,
     // Target is the path to mount in the container.
     pub target: String,
     // ReadOnly specifies if the mount should be mounted read only.
@@ -110,15 +110,25 @@ impl ToString for Mount {
     fn to_string(&self) -> String {
         match self {
             Mount {
-                source,
+                source: Some(source),
                 target,
                 read_only: true,
-            } => format!("{source}:{target}"),
+            } => format!("{source}:{target}:ro"),
             Mount {
-                source,
+                source: Some(source),
                 target,
                 read_only: false,
             } => format!("{source}:{target}"),
+            Mount {
+                source: None,
+                target,
+                read_only: true,
+            } => format!("{target}:ro"),
+            Mount {
+                source: None,
+                target,
+                read_only: false,
+            } => format!("{target}"),
         }
     }
 }
@@ -129,7 +139,7 @@ pub struct PortMapping {
     // container_port is the port in the container to map to.
     pub container_port: u32,
     // host_port is the port to expose on the host.
-    pub host_port: u32,
+    pub host_port: u16,
     // protocol is the protocol (tcp, udp, etc.) to use.
     pub protocol: String,
 }

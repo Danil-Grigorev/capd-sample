@@ -176,6 +176,15 @@ impl DockerMachine {
         }
 
         association.create().await?;
+
+        // if the machine is a control plane update the load balancer configuration
+        // we should only do this once, as reconfiguration more or less ensures
+        // node ref setting fails
+        match status.load_balancer_configured {
+            Some(false) | None => (), //todo!("Update configuration"); status.load_balancer_configured = Some(true),
+            Some(true) => (),
+        };
+
         info!("done");
 
         Ok(Action::requeue(Duration::from_secs(5 * 60)))

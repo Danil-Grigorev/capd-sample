@@ -31,6 +31,9 @@ pub enum Error {
     #[error("Expected to create container: {0}")]
     ContainerCreateError(#[source] docker_api::Error),
 
+    #[error("Unable to find available port: {0}")]
+    PortLookupError(#[source] std::io::Error),
+
     #[error("IllegalDocument")]
     IllegalDocument,
 }
