@@ -4,12 +4,17 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// MachinePoolSpec defines the desired state of MachinePool.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "cluster.x-k8s.io", version = "v1beta1", kind = "MachinePool", plural = "machinepools")]
+#[kube(
+    group = "cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "MachinePool",
+    plural = "machinepools"
+)]
 #[kube(namespaced)]
 #[kube(status = "MachinePoolStatus")]
 pub struct MachinePoolSpec {
@@ -17,18 +22,30 @@ pub struct MachinePoolSpec {
     #[serde(rename = "clusterName")]
     pub cluster_name: String,
     /// FailureDomains is the list of failure domains this MachinePool should be attached to.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failureDomains")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failureDomains"
+    )]
     pub failure_domains: Option<Vec<String>>,
     /// Minimum number of seconds for which a newly created machine instances should
     /// be ready.
     /// Defaults to 0 (machine instance will be considered available as soon as it
     /// is ready)
     /// NOTE: No logic is implemented for this field and it currently has no behaviour.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "minReadySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "minReadySeconds"
+    )]
     pub min_ready_seconds: Option<i32>,
     /// ProviderIDList are the identification IDs of machine instances provided by the provider.
     /// This field must match the provider IDs as seen on the node objects corresponding to a machine pool's machine instances.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "providerIDList")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "providerIDList"
+    )]
     pub provider_id_list: Option<Vec<String>>,
     /// Number of desired machines. Defaults to 1.
     /// This is a pointer to distinguish between explicit zero and not specified.
@@ -81,7 +98,11 @@ pub struct MachinePoolTemplateSpec {
     pub cluster_name: String,
     /// FailureDomain is the failure domain the machine will be created in.
     /// Must match a key in the FailureDomains map stored on the cluster object.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failureDomain")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failureDomain"
+    )]
     pub failure_domain: Option<String>,
     /// InfrastructureRef is a required reference to a custom resource
     /// offered by an infrastructure provider.
@@ -90,16 +111,28 @@ pub struct MachinePoolTemplateSpec {
     /// NodeDeletionTimeout defines how long the controller will attempt to delete the Node that the Machine
     /// hosts after the Machine is marked for deletion. A duration of 0 will retry deletion indefinitely.
     /// Defaults to 10 seconds.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeDeletionTimeout")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeDeletionTimeout"
+    )]
     pub node_deletion_timeout: Option<String>,
     /// NodeDrainTimeout is the total amount of time that the controller will spend on draining a node.
     /// The default value is 0, meaning that the node can be drained without any time limitations.
     /// NOTE: NodeDrainTimeout is different from `kubectl drain --timeout`
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeDrainTimeout")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeDrainTimeout"
+    )]
     pub node_drain_timeout: Option<String>,
     /// NodeVolumeDetachTimeout is the total amount of time that the controller will spend on waiting for all volumes
     /// to be detached. The default value is 0, meaning that the volumes can be detached without any time limitations.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeVolumeDetachTimeout")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeVolumeDetachTimeout"
+    )]
     pub node_volume_detach_timeout: Option<String>,
     /// ProviderID is the identification ID of the machine provided by the provider.
     /// This field must match the provider ID as seen on the node object corresponding to this machine.
@@ -111,7 +144,11 @@ pub struct MachinePoolTemplateSpec {
     /// and then a comparison is done to find out unregistered machines and are marked for delete.
     /// This field will be set by the actuators and consumed by higher level entities like autoscaler that will
     /// be interfacing with cluster-api as generic provider.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "providerID")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "providerID"
+    )]
     pub provider_id: Option<String>,
     /// Version defines the desired Kubernetes version.
     /// This field is meant to be optionally used by bootstrap providers.
@@ -131,7 +168,11 @@ pub struct MachinePoolTemplateSpecBootstrap {
     pub config_ref: Option<MachinePoolTemplateSpecBootstrapConfigRef>,
     /// DataSecretName is the name of the secret that stores the bootstrap data script.
     /// If nil, the Machine should remain in the Pending state.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "dataSecretName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "dataSecretName"
+    )]
     pub data_secret_name: Option<String>,
 }
 
@@ -142,7 +183,11 @@ pub struct MachinePoolTemplateSpecBootstrap {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MachinePoolTemplateSpecBootstrapConfigRef {
     /// API version of the referent.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "apiVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "apiVersion"
+    )]
     pub api_version: Option<String>,
     /// If referring to a piece of an object instead of an entire object, this string
     /// should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
@@ -168,7 +213,11 @@ pub struct MachinePoolTemplateSpecBootstrapConfigRef {
     pub namespace: Option<String>,
     /// Specific resourceVersion to which this reference is made, if any.
     /// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resourceVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resourceVersion"
+    )]
     pub resource_version: Option<String>,
     /// UID of the referent.
     /// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
@@ -181,7 +230,11 @@ pub struct MachinePoolTemplateSpecBootstrapConfigRef {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MachinePoolTemplateSpecInfrastructureRef {
     /// API version of the referent.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "apiVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "apiVersion"
+    )]
     pub api_version: Option<String>,
     /// If referring to a piece of an object instead of an entire object, this string
     /// should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
@@ -207,7 +260,11 @@ pub struct MachinePoolTemplateSpecInfrastructureRef {
     pub namespace: Option<String>,
     /// Specific resourceVersion to which this reference is made, if any.
     /// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resourceVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resourceVersion"
+    )]
     pub resource_version: Option<String>,
     /// UID of the referent.
     /// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
@@ -219,37 +276,65 @@ pub struct MachinePoolTemplateSpecInfrastructureRef {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MachinePoolStatus {
     /// The number of available replicas (ready for at least minReadySeconds) for this MachinePool.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "availableReplicas")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "availableReplicas"
+    )]
     pub available_replicas: Option<i32>,
     /// BootstrapReady is the state of the bootstrap provider.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "bootstrapReady")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "bootstrapReady"
+    )]
     pub bootstrap_ready: Option<bool>,
     /// Conditions define the current service state of the MachinePool.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<MachinePoolStatusConditions>>,
     /// FailureMessage indicates that there is a problem reconciling the state,
     /// and will be set to a descriptive error message.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failureMessage")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failureMessage"
+    )]
     pub failure_message: Option<String>,
     /// FailureReason indicates that there is a problem reconciling the state, and
     /// will be set to a token value suitable for programmatic interpretation.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failureReason")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failureReason"
+    )]
     pub failure_reason: Option<String>,
     /// InfrastructureReady is the state of the infrastructure provider.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "infrastructureReady")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "infrastructureReady"
+    )]
     pub infrastructure_ready: Option<bool>,
     /// NodeRefs will point to the corresponding Nodes if it they exist.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeRefs")]
     pub node_refs: Option<Vec<MachinePoolStatusNodeRefs>>,
     /// ObservedGeneration is the latest generation observed by the controller.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "observedGeneration")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "observedGeneration"
+    )]
     pub observed_generation: Option<i64>,
     /// Phase represents the current phase of cluster actuation.
     /// E.g. Pending, Running, Terminating, Failed etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase: Option<String>,
     /// The number of ready replicas for this MachinePool. A machine is considered ready when the node has been created and is "Ready".
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "readyReplicas")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "readyReplicas"
+    )]
     pub ready_replicas: Option<i32>,
     /// Replicas is the most recently observed number of replicas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -259,7 +344,11 @@ pub struct MachinePoolStatus {
     /// the machine pool to have 100% available capacity. They may either
     /// be machine instances that are running but not yet available or machine instances
     /// that still have not been created.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "unavailableReplicas")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "unavailableReplicas"
+    )]
     pub unavailable_replicas: Option<i32>,
 }
 
@@ -307,14 +396,18 @@ pub struct MachinePoolStatusConditions {
 ///     and the version of the actual struct is irrelevant.
 ///  5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
 ///     will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-/// 
-/// 
+///
+///
 /// Instead of using this type, create a locally provided and used type that is well-focused on your reference.
 /// For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MachinePoolStatusNodeRefs {
     /// API version of the referent.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "apiVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "apiVersion"
+    )]
     pub api_version: Option<String>,
     /// If referring to a piece of an object instead of an entire object, this string
     /// should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
@@ -340,11 +433,14 @@ pub struct MachinePoolStatusNodeRefs {
     pub namespace: Option<String>,
     /// Specific resourceVersion to which this reference is made, if any.
     /// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resourceVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resourceVersion"
+    )]
     pub resource_version: Option<String>,
     /// UID of the referent.
     /// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uid: Option<String>,
 }
-

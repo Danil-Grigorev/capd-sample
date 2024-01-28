@@ -4,26 +4,43 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// DockerClusterSpec defines the desired state of DockerCluster.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "infrastructure.cluster.x-k8s.io", version = "v1beta1", kind = "DockerCluster", plural = "dockerclusters")]
+#[kube(
+    group = "infrastructure.cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "DockerCluster",
+    plural = "dockerclusters"
+)]
 #[kube(namespaced)]
 #[kube(status = "DockerClusterStatus")]
 pub struct DockerClusterSpec {
     /// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "controlPlaneEndpoint")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "controlPlaneEndpoint"
+    )]
     pub control_plane_endpoint: Option<DockerClusterControlPlaneEndpoint>,
     /// FailureDomains are usually not defined in the spec.
     /// The docker provider is special since failure domains don't mean anything in a local docker environment.
     /// Instead, the docker cluster controller will simply copy these into the Status and allow the Cluster API
     /// controllers to do what they will with the defined failure domains.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failureDomains")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failureDomains"
+    )]
     pub failure_domains: Option<BTreeMap<String, DockerClusterFailureDomains>>,
     /// LoadBalancer allows defining configurations for the cluster load balancer.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "loadBalancer")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "loadBalancer"
+    )]
     pub load_balancer: Option<DockerClusterLoadBalancer>,
 }
 
@@ -47,7 +64,11 @@ pub struct DockerClusterFailureDomains {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<BTreeMap<String, String>>,
     /// ControlPlane determines if this failure domain is suitable for use by control plane machines.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "controlPlane")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "controlPlane"
+    )]
     pub control_plane: Option<bool>,
 }
 
@@ -62,11 +83,20 @@ pub struct DockerClusterLoadBalancer {
     /// $BackendControlPlanePort (string) indicates the backend control plane port, $BackendServers (map[string]string) indicates the backend server
     /// where the key is the server name and the value is the address. This map is dynamic and is updated every time a new control plane
     /// node is added or removed. The template will also support the JoinHostPort function to join the host and port of the backend server.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customHAProxyConfigTemplateRef")]
-    pub custom_ha_proxy_config_template_ref: Option<DockerClusterLoadBalancerCustomHaProxyConfigTemplateRef>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customHAProxyConfigTemplateRef"
+    )]
+    pub custom_ha_proxy_config_template_ref:
+        Option<DockerClusterLoadBalancerCustomHaProxyConfigTemplateRef>,
     /// ImageRepository sets the container registry to pull the haproxy image from.
     /// if not set, "kindest" will be used instead.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "imageRepository")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "imageRepository"
+    )]
     pub image_repository: Option<String>,
     /// ImageTag allows to specify a tag for the haproxy image.
     /// if not set, "v20210715-a6da3463" will be used instead.
@@ -99,7 +129,11 @@ pub struct DockerClusterStatus {
     pub conditions: Option<Vec<DockerClusterStatusConditions>>,
     /// FailureDomains don't mean much in CAPD since it's all local, but we can see how the rest of cluster API
     /// will use this if we populate it.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failureDomains")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failureDomains"
+    )]
     pub failure_domains: Option<BTreeMap<String, DockerClusterStatusFailureDomains>>,
     /// Ready denotes that the docker cluster (infrastructure) is ready.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,7 +179,10 @@ pub struct DockerClusterStatusFailureDomains {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attributes: Option<BTreeMap<String, String>>,
     /// ControlPlane determines if this failure domain is suitable for use by control plane machines.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "controlPlane")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "controlPlane"
+    )]
     pub control_plane: Option<bool>,
 }
-

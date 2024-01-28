@@ -4,12 +4,17 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// ExtensionConfigSpec is the desired state of the ExtensionConfig
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "runtime.cluster.x-k8s.io", version = "v1alpha1", kind = "ExtensionConfig", plural = "extensionconfigs")]
+#[kube(
+    group = "runtime.cluster.x-k8s.io",
+    version = "v1alpha1",
+    kind = "ExtensionConfig",
+    plural = "extensionconfigs"
+)]
 #[kube(status = "ExtensionConfigStatus")]
 pub struct ExtensionConfigSpec {
     /// ClientConfig defines how to communicate with the Extension server.
@@ -18,7 +23,11 @@ pub struct ExtensionConfigSpec {
     /// NamespaceSelector decides whether to call the hook for an object based
     /// on whether the namespace for that object matches the selector.
     /// Defaults to the empty LabelSelector, which matches all objects.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "namespaceSelector")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "namespaceSelector"
+    )]
     pub namespace_selector: Option<ExtensionConfigNamespaceSelector>,
     /// Settings defines key value pairs to be passed to all calls
     /// to all supported RuntimeExtensions.
@@ -35,27 +44,27 @@ pub struct ExtensionConfigClientConfig {
     pub ca_bundle: Option<String>,
     /// Service is a reference to the Kubernetes service for the Extension server.
     /// Note: Exactly one of `url` or `service` must be specified.
-    /// 
-    /// 
+    ///
+    ///
     /// If the Extension server is running within a cluster, then you should use `service`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service: Option<ExtensionConfigClientConfigService>,
     /// URL gives the location of the Extension server, in standard URL form
     /// (`scheme://host:port/path`).
     /// Note: Exactly one of `url` or `service` must be specified.
-    /// 
-    /// 
+    ///
+    ///
     /// The scheme must be "https".
-    /// 
-    /// 
+    ///
+    ///
     /// The `host` should not refer to a service running in the cluster; use
     /// the `service` field instead.
-    /// 
-    /// 
+    ///
+    ///
     /// A path is optional, and if present may be any string permissible in
     /// a URL. If a path is set it will be used as prefix to the hook-specific path.
-    /// 
-    /// 
+    ///
+    ///
     /// Attempting to use a user or basic auth e.g. "user:password@" is not
     /// allowed. Fragments ("#...") and query parameters ("?...") are not
     /// allowed either.
@@ -65,8 +74,8 @@ pub struct ExtensionConfigClientConfig {
 
 /// Service is a reference to the Kubernetes service for the Extension server.
 /// Note: Exactly one of `url` or `service` must be specified.
-/// 
-/// 
+///
+///
 /// If the Extension server is running within a cluster, then you should use `service`.
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct ExtensionConfigClientConfigService {
@@ -91,12 +100,20 @@ pub struct ExtensionConfigClientConfigService {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct ExtensionConfigNamespaceSelector {
     /// matchExpressions is a list of label selector requirements. The requirements are ANDed.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchExpressions")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "matchExpressions"
+    )]
     pub match_expressions: Option<Vec<ExtensionConfigNamespaceSelectorMatchExpressions>>,
     /// matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
     /// map is equivalent to an element of matchExpressions, whose key field is "key", the
     /// operator is "In", and the values array contains only "value". The requirements are ANDed.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchLabels")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "matchLabels"
+    )]
     pub match_labels: Option<BTreeMap<String, String>>,
 }
 
@@ -164,7 +181,11 @@ pub struct ExtensionConfigStatusConditions {
 pub struct ExtensionConfigStatusHandlers {
     /// FailurePolicy defines how failures in calls to the ExtensionHandler should be handled by a client.
     /// Defaults to Fail if not set.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "failurePolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "failurePolicy"
+    )]
     pub failure_policy: Option<String>,
     /// Name is the unique name of the ExtensionHandler.
     pub name: String,
@@ -173,7 +194,11 @@ pub struct ExtensionConfigStatusHandlers {
     pub request_hook: ExtensionConfigStatusHandlersRequestHook,
     /// TimeoutSeconds defines the timeout duration for client calls to the ExtensionHandler.
     /// Defaults to 10 is not set.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "timeoutSeconds"
+    )]
     pub timeout_seconds: Option<i32>,
 }
 
@@ -186,4 +211,3 @@ pub struct ExtensionConfigStatusHandlersRequestHook {
     /// Hook is the name of the hook.
     pub hook: String,
 }
-

@@ -4,11 +4,16 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// IPAddressSpec is the desired state of an IPAddress.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "ipam.cluster.x-k8s.io", version = "v1beta1", kind = "IPAddress", plural = "ipaddresses")]
+#[kube(
+    group = "ipam.cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "IPAddress",
+    plural = "ipaddresses"
+)]
 #[kube(namespaced)]
 pub struct IPAddressSpec {
     /// Address is the IP address.
@@ -49,4 +54,3 @@ pub struct IPAddressPoolRef {
     /// Name is the name of resource being referenced
     pub name: String,
 }
-

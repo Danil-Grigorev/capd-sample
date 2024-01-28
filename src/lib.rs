@@ -44,9 +44,15 @@ impl Error {
 
 const CLUSTER_NAME_LABEL: &str = "cluster.x-k8s.io/cluster-name";
 const CLUSTER_LABEL_KEY: &str = "io.x-k8s.kind.cluster";
+const HASH_LABEL_KEY: &str = "io.x-k8s.container-hash";
 const NODE_ROLE_LABEL_KEY: &str = "io.x-k8s.kind.role";
 const FILTER_LABEL: &str = "label";
 const FILTER_NAME: &str = "name";
+
+const DEFAULT_IMAGE: &str = "kindest/node";
+const DEFAULT_VERSION: &str = "v1.27.3";
+const DEFAULT_DOCKER_SOCKET: &str = "/var/run/docker.sock";
+const MACHINE_CONTROL_PLANE_LABEL: &str = "cluster.x-k8s.io/control-plane";
 
 pub mod api;
 /// Expose all controller components used by main

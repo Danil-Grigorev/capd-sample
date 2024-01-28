@@ -4,12 +4,17 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// ClusterResourceSetSpec defines the desired state of ClusterResourceSet.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "addons.cluster.x-k8s.io", version = "v1beta1", kind = "ClusterResourceSet", plural = "clusterresourcesets")]
+#[kube(
+    group = "addons.cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "ClusterResourceSet",
+    plural = "clusterresourcesets"
+)]
 #[kube(namespaced)]
 #[kube(status = "ClusterResourceSetStatus")]
 pub struct ClusterResourceSetSpec {
@@ -34,12 +39,20 @@ pub struct ClusterResourceSetSpec {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct ClusterResourceSetClusterSelector {
     /// matchExpressions is a list of label selector requirements. The requirements are ANDed.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchExpressions")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "matchExpressions"
+    )]
     pub match_expressions: Option<Vec<ClusterResourceSetClusterSelectorMatchExpressions>>,
     /// matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
     /// map is equivalent to an element of matchExpressions, whose key field is "key", the
     /// operator is "In", and the values array contains only "value". The requirements are ANDed.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchLabels")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "matchLabels"
+    )]
     pub match_labels: Option<BTreeMap<String, String>>,
 }
 
@@ -90,7 +103,11 @@ pub struct ClusterResourceSetStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<ClusterResourceSetStatusConditions>>,
     /// ObservedGeneration reflects the generation of the most recently observed ClusterResourceSet.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "observedGeneration")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "observedGeneration"
+    )]
     pub observed_generation: Option<i64>,
 }
 
@@ -124,4 +141,3 @@ pub struct ClusterResourceSetStatusConditions {
     #[serde(rename = "type")]
     pub r#type: String,
 }
-

@@ -18,7 +18,10 @@ use crate::{
         dockermachines::{DockerMachine, DockerMachineStatus},
         machines::Machine,
     },
-    docker::docker::{self, Association},
+    docker::{
+        container::interface::ClusterIPFamily,
+        docker::{self, Association},
+    },
     Context, Error, Result, CLUSTER_NAME_LABEL,
 };
 
@@ -40,51 +43,6 @@ impl Machine {
     }
 }
 
-// Define the ClusterIPFamily constants.
-pub enum ClusterIPFamily {
-    IPv4IPFamily(Vec<Ipv4Addr>),
-    IPv6IPFamily(Vec<Ipv6Addr>),
-    DualStackIPFamily(Vec<IpAddr>),
-}
-
-impl ClusterIPFamily {
-    pub fn new(cidr_strings: Vec<String>) -> Result<ClusterIPFamily> {
-        let ip_families: Result<Vec<IpAddr>> = cidr_strings
-            .iter()
-            .map(|c| c.parse::<IpAddr>().map_err(Error::IPFamilyUnknown))
-            .collect();
-
-        Ok(ClusterIPFamily::group(ip_families?))
-    }
-
-    fn group(ip_families: Vec<IpAddr>) -> ClusterIPFamily {
-        match ip_families {
-            ip_families if ip_families.iter().all(|ip| ip.is_ipv4()) => {
-                ClusterIPFamily::IPv4IPFamily(
-                    ip_families
-                        .into_iter()
-                        .filter_map(|ip| match ip {
-                            IpAddr::V4(ip) => Some(ip),
-                            _ => None,
-                        })
-                        .collect(),
-                )
-            }
-            ip_families if ip_families.iter().all(|ip| ip.is_ipv6()) => {
-                ClusterIPFamily::IPv6IPFamily(
-                    ip_families
-                        .into_iter()
-                        .filter_map(|ip| match ip {
-                            IpAddr::V6(ip) => Some(ip),
-                            _ => None,
-                        })
-                        .collect(),
-                )
-            }
-            ip_families => ClusterIPFamily::DualStackIPFamily(ip_families),
-        }
-    }
-}
 impl Cluster {
     pub async fn get_cluster(&self, ctx: Arc<Context>) -> Option<DockerCluster> {
         let clusters: Api<DockerCluster> = Api::namespaced(
@@ -170,14 +128,16 @@ impl DockerMachine {
             }
         };
 
-        self.reconcile_normal(Association::new(cluster, machine, Default::default()).await?)
-            .await?;
+        self.reconcile_normal(
+            Association::new(cluster, machine, self.spec.custom_image.clone()).await?,
+        )
+        .await?;
 
         Ok(Action::requeue(Duration::from_secs(5 * 60)))
     }
 
     pub async fn reconcile_normal(&self, association: Association) -> Result<Action> {
-        let mut status = self.status.clone().unwrap();
+        let mut status = self.status.clone().unwrap_or_default();
 
         // Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
         match association.cluster {
@@ -215,7 +175,7 @@ impl DockerMachine {
             _ => (),
         }
 
-        association.create_container().await?;
+        association.create().await?;
         info!("done");
 
         Ok(Action::requeue(Duration::from_secs(5 * 60)))

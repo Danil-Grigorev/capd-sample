@@ -1,105 +1,258 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
-use docker_api::{
-    models::ContainerSummary,
-    opts::{ContainerCreateOpts, ContainerCreateOptsBuilder, ContainerFilter, ContainerListOpts},
-    Container,
-};
+use docker_api::opts::ContainerFilter;
 use kube_core::ResourceExt;
-use tracing::info;
 
 use crate::{
     api::{cluster::Cluster, machines::Machine},
-    controllers::docker::ClusterIPFamily,
-    Error, Result, CLUSTER_LABEL_KEY,
+    Result, CLUSTER_LABEL_KEY, DEFAULT_DOCKER_SOCKET, DEFAULT_IMAGE, DEFAULT_VERSION,
+    HASH_LABEL_KEY, MACHINE_CONTROL_PLANE_LABEL, NODE_ROLE_LABEL_KEY,
+};
+
+use super::container::{
+    docker::Runtime,
+    interface::{Mount, PortMapping, RunContainerInput},
 };
 
 // Node can be thought of as a logical component of Kubernetes.
 // A node is either a control plane node, a worker node, or a load balancer node.
+#[derive(Debug)]
 pub struct Node {
-    name: Option<String>,
-    cluster_role: Option<String>,
-    internal_ip: Option<String>,
-    image: Option<String>,
+    name: String,
+    image: String,
     status: Option<String>,
     // Commander:   *ContainerCmder
 }
 
+pub enum MachineRole {
+    Worker(Association),
+    ControlPlane(Association),
+}
+
+impl MachineRole {
+    fn from_machine(association: Association) -> Self {
+        match association
+            .machine
+            .labels()
+            .contains_key(MACHINE_CONTROL_PLANE_LABEL)
+        {
+            true => MachineRole::ControlPlane(association),
+            false => MachineRole::Worker(association),
+        }
+    }
+
+    fn role_label(&self) -> (String, String) {
+        match self {
+            MachineRole::Worker(_) => (NODE_ROLE_LABEL_KEY.to_string(), "worker".to_string()),
+            MachineRole::ControlPlane(_) => {
+                (NODE_ROLE_LABEL_KEY.to_string(), "control-plane".to_string())
+            }
+        }
+    }
+
+    fn cluster_label(&self) -> (String, String) {
+        match self {
+            MachineRole::Worker(a) | MachineRole::ControlPlane(a) => {
+                (CLUSTER_LABEL_KEY.to_string(), a.cluster.name_any())
+            }
+        }
+    }
+
+    fn hash_label(&self) -> (String, String) {
+        (
+            HASH_LABEL_KEY.to_string(),
+            self.base_create().get_hash().to_string(),
+        )
+    }
+
+    fn get_filters(&self) -> Vec<ContainerFilter> {
+        self.get_labels()
+            .iter()
+            .map(|(k, v)| ContainerFilter::Label(k.clone(), v.clone()))
+            .collect()
+    }
+
+    fn get_labels(&self) -> BTreeMap<String, String> {
+        BTreeMap::from([self.role_label(), self.hash_label(), self.cluster_label()])
+    }
+
+    async fn create_machine(&self) -> Result<()> {
+        match self {
+            MachineRole::Worker(association) | MachineRole::ControlPlane(association) => {
+                if association
+                    .get_container(self.get_filters())
+                    .await?
+                    .is_some()
+                {
+                    return Ok(());
+                }
+            }
+        };
+
+        match self {
+            MachineRole::Worker(association) | MachineRole::ControlPlane(association) => {
+                let container = association
+                    .runtime
+                    .create_container(self.create_input())
+                    .await?;
+
+                association
+                    .runtime
+                    .exec(container.id().to_string(), vec!["crictl", "ps"])
+                    .await
+            }
+        }
+    }
+
+    fn create_input(&self) -> RunContainerInput {
+        match self {
+            MachineRole::Worker(association) => RunContainerInput {
+                image: association.get_image(),
+                labels: self.get_labels(),
+                ..self.base_create()
+            },
+            MachineRole::ControlPlane(association) => RunContainerInput {
+                image: association.get_image(),
+                labels: self.get_labels(),
+                port_mappings: vec![PortMapping {
+                    container_port: 6443,
+                    host_port: 9443,
+                    protocol: "tcp".to_string(),
+                }],
+                ..self.base_create()
+            },
+        }
+    }
+
+    fn base_create(&self) -> RunContainerInput {
+        match self {
+            Self::Worker(association) | Self::ControlPlane(association) => RunContainerInput {
+                mounts: association.generate_mount_info(),
+                name: association.container_name(),
+                network: "kind".to_string(),
+                // ip_family: Default::default(),
+                ..Default::default()
+            },
+        }
+    }
+}
+
 // Association implement a service for managing the docker containers hosting a kubernetes nodes.
+#[derive(Clone)]
 pub struct Association {
+    pub runtime: Runtime,
     pub cluster: Cluster,
     pub machine: Machine,
+    pub custom_image: Option<String>,
     // pod_ips: ClusterIPFamily,
     // service_ips: ClusterIPFamily,
-    container: Node,
-    // nodeCreator nodeCreator
 }
 
 impl Association {
     pub async fn new(
         cluster: Cluster,
         machine: Machine,
-        labels: HashMap<String, String>,
+        custom_image: Option<String>,
     ) -> Result<Association> {
-        let filters = vec![
-            ContainerFilter::Label(CLUSTER_LABEL_KEY.to_string(), cluster.name_any()),
-            // ContainerFilter::LabelKey(format!("^{}-{}$", cluster.name_any(), machine.name_any())),
-        ]
-        .into_iter();
-        // .chain(
-        //     labels
-        //         .into_iter()
-        //         .map(|(k, v)| ContainerFilter::Label(k, v)),
-        // );
-
         Ok(Association {
             machine,
-            container: Association::get_container(filters.collect()).await?,
+            custom_image,
+            runtime: Runtime::new()?,
             cluster: cluster.clone(),
             // pod_ips: cluster.get_pod_ip_family()?,
             // service_ips: cluster.get_services_ip_family()?,
-            // nodeCreator: &Manager{},
         })
     }
 
-    pub async fn get_container(filters: Vec<ContainerFilter>) -> Result<Node> {
-        let container_list = Association::list_containers(filters).await?;
-        let container = container_list
-            .first()
-            .ok_or(Error::ContainerLookupError)?
-            .clone();
-        let names = container.names.unwrap_or_default();
+    pub async fn get_container(&self, filters: Vec<ContainerFilter>) -> Result<Option<Node>> {
+        let container = match self
+            .runtime
+            .list_containers(filters)
+            .await?
+            .into_iter()
+            .find(|c| {
+                c.names.clone().is_some_and(|names| {
+                    names
+                        .iter()
+                        .any(|n| n.contains(format!("/{}", &self.container_name()).as_str()))
+                })
+            }) {
+            Some(container) => container.clone(),
+            None => return Ok(None),
+        };
 
-        Ok(Node {
-            name: match names.first() {
-                Some(name) => Some(name.clone()),
-                None => None,
+        Ok(
+            match (container.names.unwrap_or_default().first(), container.image) {
+                (Some(name), Some(image)) => Some(Node {
+                    image,
+                    name: name.to_string(),
+                    status: container.status,
+                }),
+                _ => None,
             },
-            cluster_role: None,
-            internal_ip: None,
-            image: container.image,
-            status: container.status,
-        })
+        )
     }
 
-    pub async fn list_containers(filters: Vec<ContainerFilter>) -> Result<Vec<ContainerSummary>> {
-        let api = docker_api::Docker::new("unix:///var/run/docker.sock")
-            .map_err(Error::ContainerError)?;
-        api.containers()
-            .list(&ContainerListOpts::builder().filter(filters).build())
-            .await
-            .map_err(Error::ContainerError)
+    pub async fn create(self) -> Result<()> {
+        MachineRole::from_machine(self).create_machine().await
     }
 
-    pub async fn create_container(&self) -> Result<Container> {
-        let image = "kindest/node:v1.26.3";
-        let api = docker_api::Docker::new("unix:///var/run/docker.sock")
-            .map_err(Error::ContainerError)?;
-        let container = api.containers()
-            .create(&ContainerCreateOptsBuilder::default().name("test").image(image).build())
-            .await
-            .map_err(Error::ContainerCreateError)?;
-        info!("{container:?}");
-        Ok(container)
+    fn get_image(&self) -> String {
+        if let Some(image) = self.custom_image.clone() {
+            return image;
+        }
+
+        match self.machine.spec.version.clone() {
+            Some(version) => match version.as_bytes() {
+                [b'v', ..] => format!("{DEFAULT_IMAGE}:{}", version.to_string()),
+                _ => format!("{DEFAULT_IMAGE}:v{version}"),
+            },
+            None => format!("{DEFAULT_IMAGE}:{DEFAULT_VERSION}"),
+        }
+    }
+
+    fn container_name(&self) -> String {
+        let (cluster, machine) = (self.cluster.name_any(), self.machine.name_any());
+
+        match machine.starts_with(cluster.as_str()) {
+            true => machine,
+            false => format!("{cluster}-{machine}"),
+        }
+    }
+
+    fn generate_mount_info(&self) -> Vec<Mount> {
+        vec![
+            // some k8s things want to read /lib/modules
+            Mount {
+                source: "/lib/modules".into(),
+                target: "/lib/modules".into(),
+                read_only: true,
+            },
+            Mount {
+                source: DEFAULT_DOCKER_SOCKET.into(),
+                target: DEFAULT_DOCKER_SOCKET.into(),
+                read_only: false,
+            },
+            // TODO: Unfortunately it's impossible to pass volumes without target
+            // runtime persistent storage
+            // this ensures that E.G. pods, logs etc. are not on the container
+            // filesystem, which is not only better for performance
+            // Mount {
+            //     source: "/var".to_string(),
+            //     target: "".to_string(),
+            //     read_only: false,
+            // },
+            // tmpfs
+            // Mount {
+            //     source: "/tmp".to_string(),
+            //     target: "".to_string(),
+            //     read_only: false,
+            // },
+            // Mount {
+            //     source: "/run".to_string(),
+            //     target: "".to_string(),
+            //     read_only: false,
+            // },
+        ]
     }
 }

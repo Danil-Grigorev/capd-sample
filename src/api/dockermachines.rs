@@ -4,40 +4,65 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// DockerMachineSpec defines the desired state of DockerMachine.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "infrastructure.cluster.x-k8s.io", version = "v1beta1", kind = "DockerMachine", plural = "dockermachines")]
+#[kube(
+    group = "infrastructure.cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "DockerMachine",
+    plural = "dockermachines"
+)]
 #[kube(namespaced)]
 #[kube(status = "DockerMachineStatus")]
 pub struct DockerMachineSpec {
     /// BootstrapTimeout is the total amount of time to wait for the machine to bootstrap before timing out.
     /// The default value is 3m.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "bootstrapTimeout")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "bootstrapTimeout"
+    )]
     pub bootstrap_timeout: Option<String>,
     /// Bootstrapped is true when the kubeadm bootstrapping has been run
     /// against this machine
-    /// 
-    /// 
+    ///
+    ///
     /// Deprecated: This field will be removed in the next apiVersion.
     /// When removing also remove from staticcheck exclude-rules for SA1019 in golangci.yml.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bootstrapped: Option<bool>,
     /// CustomImage allows customizing the container image that is used for
     /// running the machine
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customImage")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customImage"
+    )]
     pub custom_image: Option<String>,
     /// ExtraMounts describes additional mount points for the node container
     /// These may be used to bind a hostPath
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "extraMounts")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "extraMounts"
+    )]
     pub extra_mounts: Option<Vec<DockerMachineExtraMounts>>,
     /// PreLoadImages allows to pre-load images in a newly created machine. This can be used to
     /// speed up tests by avoiding e.g. to download CNI images on all the containers.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preLoadImages")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preLoadImages"
+    )]
     pub pre_load_images: Option<Vec<String>>,
     /// ProviderID will be the container name in ProviderID format (docker:////<containername>)
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "providerID")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "providerID"
+    )]
     pub provider_id: Option<String>,
 }
 
@@ -46,7 +71,11 @@ pub struct DockerMachineSpec {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct DockerMachineExtraMounts {
     /// Path of the mount within the container.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "containerPath")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "containerPath"
+    )]
     pub container_path: Option<String>,
     /// Path of the mount on the host. If the hostPath doesn't exist, then runtimes
     /// should report error. If the hostpath is a symbolic link, runtimes should
@@ -59,7 +88,7 @@ pub struct DockerMachineExtraMounts {
 }
 
 /// DockerMachineStatus defines the observed state of DockerMachine.
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, Default)]
 pub struct DockerMachineStatus {
     /// Addresses contains the associated addresses for the docker machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -69,7 +98,11 @@ pub struct DockerMachineStatus {
     pub conditions: Option<Vec<DockerMachineStatusConditions>>,
     /// LoadBalancerConfigured denotes that the machine has been
     /// added to the load balancer
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "loadBalancerConfigured")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "loadBalancerConfigured"
+    )]
     pub load_balancer_configured: Option<bool>,
     /// Ready denotes that the machine (docker container) is ready
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -116,4 +149,3 @@ pub struct DockerMachineStatusConditions {
     #[serde(rename = "type")]
     pub r#type: String,
 }
-

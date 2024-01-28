@@ -4,11 +4,16 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// ClusterResourceSetBindingSpec defines the desired state of ClusterResourceSetBinding.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "addons.cluster.x-k8s.io", version = "v1beta1", kind = "ClusterResourceSetBinding", plural = "clusterresourcesetbindings")]
+#[kube(
+    group = "addons.cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "ClusterResourceSetBinding",
+    plural = "clusterresourcesetbindings"
+)]
 #[kube(namespaced)]
 pub struct ClusterResourceSetBindingSpec {
     /// Bindings is a list of ClusterResourceSets and their resources.
@@ -16,7 +21,11 @@ pub struct ClusterResourceSetBindingSpec {
     pub bindings: Option<Vec<ClusterResourceSetBindingBindings>>,
     /// ClusterName is the name of the Cluster this binding applies to.
     /// Note: this field mandatory in v1beta2.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "clusterName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "clusterName"
+    )]
     pub cluster_name: Option<String>,
 }
 
@@ -43,7 +52,11 @@ pub struct ClusterResourceSetBindingBindingsResources {
     /// Kind of the resource. Supported kinds are: Secrets and ConfigMaps.
     pub kind: ClusterResourceSetBindingBindingsResourcesKind,
     /// LastAppliedTime identifies when this resource was last applied to the cluster.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastAppliedTime")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "lastAppliedTime"
+    )]
     pub last_applied_time: Option<String>,
     /// Name of the resource that is in the same namespace with ClusterResourceSet object.
     pub name: String,
@@ -55,4 +68,3 @@ pub enum ClusterResourceSetBindingBindingsResourcesKind {
     Secret,
     ConfigMap,
 }
-

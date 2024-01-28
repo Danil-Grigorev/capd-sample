@@ -4,11 +4,16 @@
 
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// IPAddressClaimSpec is the desired state of an IPAddressClaim.
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "ipam.cluster.x-k8s.io", version = "v1beta1", kind = "IPAddressClaim", plural = "ipaddressclaims")]
+#[kube(
+    group = "ipam.cluster.x-k8s.io",
+    version = "v1beta1",
+    kind = "IPAddressClaim",
+    plural = "ipaddressclaims"
+)]
 #[kube(namespaced)]
 #[kube(status = "IPAddressClaimStatus")]
 pub struct IPAddressClaimSpec {
@@ -35,7 +40,11 @@ pub struct IPAddressClaimPoolRef {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct IPAddressClaimStatus {
     /// AddressRef is a reference to the address that was created for this claim.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "addressRef")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "addressRef"
+    )]
     pub address_ref: Option<IPAddressClaimStatusAddressRef>,
     /// Conditions summarises the current state of the IPAddressClaim
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -82,4 +91,3 @@ pub struct IPAddressClaimStatusConditions {
     #[serde(rename = "type")]
     pub r#type: String,
 }
-
