@@ -1,8 +1,8 @@
 use docker_api::{
     models::ContainerSummary,
     opts::{
-        ContainerCreateOptsBuilder, ContainerFilter, ContainerListOpts, ExecCreateOptsBuilder,
-        ExecStartOptsBuilder,
+        ContainerCreateOptsBuilder, ContainerFilter, ContainerListOpts, ContainerRemoveOptsBuilder,
+        ExecCreateOptsBuilder, ExecStartOptsBuilder,
     },
     Container, Docker, Id,
 };
@@ -58,7 +58,7 @@ impl Runtime {
 
     pub async fn create_container(&self, run: RunContainerInput) -> Result<Container> {
         info!(
-            "Created container {} {:?}",
+            "Creating container {} {:?}",
             run.image.clone(),
             run.labels.clone()
         );
@@ -74,5 +74,19 @@ impl Runtime {
             .await
             .map_err(Error::ContainerCreateError)?;
         Ok(container)
+    }
+
+    pub async fn delete_container(&self, id: String) -> Result<String> {
+        info!("Removing container");
+
+        self.get_container(id)
+            .remove(
+                &ContainerRemoveOptsBuilder::default()
+                    .force(true)
+                    .volumes(true)
+                    .build(),
+            )
+            .await
+            .map_err(Error::ContainerRemoveError)
     }
 }

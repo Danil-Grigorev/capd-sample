@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, net::TcpListener};
 
-use docker_api::opts::ContainerFilter;
+use docker_api::{models::ContainerSummary, opts::ContainerFilter};
 use kube_core::ResourceExt;
 
 use crate::{
@@ -104,6 +104,30 @@ impl MachineRole {
         }
     }
 
+    async fn delete_machine(&self) -> Result<String> {
+        match self {
+            MachineRole::Worker(association) | MachineRole::ControlPlane(association) => {
+                let container_id = match association
+                    .runtime
+                    .list_containers(self.get_filters())
+                    .await?
+                    .into_iter()
+                    .find(|c| {
+                        c.names.clone().is_some_and(|names| {
+                            names.iter().any(|n| {
+                                n.contains(format!("/{}", &association.container_name()).as_str())
+                            })
+                        })
+                    }) {
+                    Some(ContainerSummary { id: Some(id), .. }) => id.clone(),
+                    _ => return Ok(Default::default()),
+                };
+
+                association.runtime.delete_container(container_id).await
+            }
+        }
+    }
+
     fn create_input(&self) -> Result<RunContainerInput> {
         Ok(match self {
             MachineRole::Worker(association) => RunContainerInput {
@@ -199,6 +223,10 @@ impl Association {
 
     pub async fn create(self) -> Result<()> {
         MachineRole::from_machine(self).create_machine().await
+    }
+
+    pub async fn delete(self) -> Result<String> {
+        MachineRole::from_machine(self).delete_machine().await
     }
 
     fn get_image(&self) -> String {

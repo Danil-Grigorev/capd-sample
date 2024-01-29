@@ -31,11 +31,11 @@ pub enum Error {
     #[error("Expected to create container: {0}")]
     ContainerCreateError(#[source] docker_api::Error),
 
+    #[error("Expected to remove container: {0}")]
+    ContainerRemoveError(#[source] docker_api::Error),
+
     #[error("Unable to find available port: {0}")]
     PortLookupError(#[source] std::io::Error),
-
-    #[error("IllegalDocument")]
-    IllegalDocument,
 }
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 

@@ -110,12 +110,12 @@ impl DockerMachine {
         }
     }
 
-    pub async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
+    pub async fn get_association(&self, ctx: Arc<Context>) -> Result<Option<Association>> {
         let machine = match self.get_owner(ctx.clone()).await? {
             Some(machine) => machine,
             None => {
                 info!("Waiting for Machine Controller to set OwnerRef on DockerMachine");
-                return Ok(Action::requeue(Duration::from_secs(5 * 60)));
+                return Ok(None);
             }
         };
 
@@ -124,16 +124,20 @@ impl DockerMachine {
             Some(cluster) => cluster,
             None => {
                 info!("DockerCluster is not available yet");
-                return Ok(Action::requeue(Duration::from_secs(5 * 60)));
+                return Ok(None);
             }
         };
 
-        self.reconcile_normal(
+        Ok(Some(
             Association::new(cluster, machine, self.spec.custom_image.clone()).await?,
-        )
-        .await?;
+        ))
+    }
 
-        Ok(Action::requeue(Duration::from_secs(5 * 60)))
+    pub async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
+        match self.get_association(ctx).await? {
+            Some(association) => self.reconcile_normal(association).await,
+            None => Ok(Action::requeue(Duration::from_secs(5 * 60))),
+        }
     }
 
     pub async fn reconcile_normal(&self, association: Association) -> Result<Action> {
@@ -190,7 +194,16 @@ impl DockerMachine {
         Ok(Action::requeue(Duration::from_secs(5 * 60)))
     }
 
-    pub async fn cleanup(&self, _ctx: Arc<Context>) -> Result<Action> {
+    pub async fn reconcile_delete(&self, association: Association) -> Result<Action> {
+        association.delete().await?;
+
         Ok(Action::requeue(Duration::from_secs(5 * 60)))
+    }
+
+    pub async fn cleanup(&self, ctx: Arc<Context>) -> Result<Action> {
+        match self.get_association(ctx).await? {
+            Some(association) => self.reconcile_delete(association).await,
+            None => Ok(Action::requeue(Duration::from_secs(5 * 60))),
+        }
     }
 }
