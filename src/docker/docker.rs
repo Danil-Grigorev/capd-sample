@@ -1,26 +1,32 @@
-use std::{collections::BTreeMap, net::TcpListener};
+use std::{collections::BTreeMap, fs::File, io::Write, net::TcpListener, path::Path, sync::Arc};
 
-use docker_api::{models::ContainerSummary, opts::ContainerFilter};
+use docker_api::{
+    models::{ContainerSummary, ContainerSummaryNetworkSettingsInlineItem, EndpointSettings},
+    opts::ContainerFilter,
+};
+use k8s_openapi::api::core::v1::Secret;
+use kube::Api;
 use kube_core::ResourceExt;
 
 use crate::{
     api::{cluster::Cluster, machines::Machine},
-    Error, Result, CLUSTER_LABEL_KEY, DEFAULT_DOCKER_SOCKET, DEFAULT_IMAGE, DEFAULT_VERSION,
-    HASH_LABEL_KEY, MACHINE_CONTROL_PLANE_LABEL, NODE_ROLE_LABEL_KEY,
+    Context, Error, Result, CLUSTER_LABEL_KEY, DEFAULT_DOCKER_SOCKET, DEFAULT_IMAGE,
+    DEFAULT_VERSION, HASH_LABEL_KEY, MACHINE_CONTROL_PLANE_LABEL, NODE_ROLE_LABEL_KEY,
 };
 
 use super::container::{
     docker::Runtime,
-    interface::{Mount, PortMapping, RunContainerInput},
+    interface::{ClusterIPFamily, Mount, PortMapping, RunContainerInput},
 };
 
 // Node can be thought of as a logical component of Kubernetes.
 // A node is either a control plane node, a worker node, or a load balancer node.
 #[derive(Debug)]
 pub struct Node {
-    name: String,
-    image: String,
-    status: Option<String>,
+    pub name: String,
+    pub image: String,
+    pub status: Option<String>,
+    pub network: Option<EndpointSettings>,
     // Commander:   *ContainerCmder
 }
 
@@ -30,7 +36,7 @@ pub enum MachineRole {
 }
 
 impl MachineRole {
-    fn from_machine(association: Association) -> Self {
+    pub fn from_machine(association: Association) -> Self {
         match association
             .machine
             .labels()
@@ -65,7 +71,7 @@ impl MachineRole {
         )
     }
 
-    fn get_filters(&self) -> Vec<ContainerFilter> {
+    pub fn get_filters(&self) -> Vec<ContainerFilter> {
         self.get_labels()
             .iter()
             .map(|(k, v)| ContainerFilter::Label(k.clone(), v.clone()))
@@ -172,6 +178,7 @@ pub struct Association {
     pub cluster: Cluster,
     pub machine: Machine,
     pub custom_image: Option<String>,
+    pub ip_family: ClusterIPFamily,
     // pod_ips: ClusterIPFamily,
     // service_ips: ClusterIPFamily,
 }
@@ -187,6 +194,7 @@ impl Association {
             custom_image,
             runtime: Runtime::new()?,
             cluster: cluster.clone(),
+            ip_family: Default::default(),
             // pod_ips: cluster.get_pod_ip_family()?,
             // service_ips: cluster.get_services_ip_family()?,
         })
@@ -215,10 +223,63 @@ impl Association {
                     image,
                     name: name.to_string(),
                     status: container.status,
+                    network: match container.network_settings {
+                        Some(ContainerSummaryNetworkSettingsInlineItem {
+                            networks: Some(networks),
+                        }) => networks.into_iter().find(|n| true).map(|(_, n)| n),
+                        _ => None,
+                    },
                 }),
                 _ => None,
             },
         )
+    }
+
+    pub async fn prepare_bootstrap(&self, ctx: Arc<Context>) -> Result<()> {
+        let data_secret = match &self.machine.spec.bootstrap.data_secret_name {
+            None => {
+                // // if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
+                //     log.Info("Waiting for the control plane to be initialized")
+                //     conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
+                //     return ctrl.Result{}, nil
+                // }
+
+                // log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
+                // conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
+                return Err(Error::BootstrapSecretNotReady);
+            }
+            Some(secret) => secret,
+        };
+
+        let secrets: Api<Secret> = Api::namespaced(
+            ctx.client.clone(),
+            &self.machine.namespace().unwrap_or_default(),
+        );
+
+        let secret = match secrets.get(data_secret).await {
+            Ok(secret) => secret,
+            Err(kube::Error::Api(ae)) if ae.code == 404 => {
+                return Err(Error::BootstrapSecretNotReady)
+            }
+            Err(e) => return Err(Error::KubeError(e)),
+        };
+
+        let data = match secret.data {
+            Some(data) => match data.get("value") {
+                Some(data) => {
+                    String::from_utf8(data.0.clone()).map_err(|_| Error::BootstrapSecretNotReady)
+                }
+                None => Err(Error::BootstrapSecretNotReady),
+            },
+            None => Err(Error::BootstrapSecretNotReady),
+        }?;
+
+        let destination = self.bootstrap_dir();
+        let dir = Path::new(&destination);
+        std::fs::create_dir_all(dir).map_err(Error::BootsrapPrepareError)?;
+        let mut file = File::create(dir.join("init")).map_err(Error::BootsrapPrepareError)?;
+        file.write_all(data.as_bytes())
+            .map_err(Error::BootsrapPrepareError)
     }
 
     pub async fn create(self) -> Result<()> {
@@ -252,6 +313,12 @@ impl Association {
         }
     }
 
+    fn bootstrap_dir(&self) -> String {
+        let container_name = self.container_name();
+        let dir = format!("/tmp/{container_name}");
+        dir
+    }
+
     fn generate_mount_info(&self) -> Vec<Mount> {
         vec![
             // some k8s things want to read /lib/modules
@@ -283,6 +350,12 @@ impl Association {
                 source: None,
                 target: "/run".to_string(),
                 read_only: false,
+            },
+            // Cloud init data volume
+            Mount {
+                source: Some(self.bootstrap_dir()),
+                target: "/tmp/init".to_string(),
+                read_only: true,
             },
         ]
     }

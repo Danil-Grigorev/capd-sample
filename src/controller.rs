@@ -5,7 +5,6 @@ use kube::{
     runtime::{
         controller::Action,
         finalizer::{finalizer, Event},
-        reflector::ObjectRef,
         watcher::Config,
         Controller,
     },

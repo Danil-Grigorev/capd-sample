@@ -20,7 +20,7 @@ use crate::{
     },
     docker::{
         container::interface::ClusterIPFamily,
-        docker::{self, Association},
+        docker::{self, Association, MachineRole, Node},
     },
     Context, Error, Result, CLUSTER_NAME_LABEL,
 };
@@ -110,12 +110,49 @@ impl DockerMachine {
         }
     }
 
-    pub async fn get_association(&self, ctx: Arc<Context>) -> Result<Option<Association>> {
+    pub async fn set_machine_address(&self, ctx: Arc<Context>) -> Result<()> {
+        let association = self.get_association(ctx).await?;
+
+        let container = association
+            .clone()
+            .get_container(MachineRole::from_machine(association).get_filters())
+            .await?;
+
+        let network = match container {
+            Some(Node {
+                network: Some(network),
+                ..
+            }) => network,
+            _ => return Ok(()),
+        };
+
+        // TODO: something with status.
+        // dockerMachine.Status.Addresses = []clusterv1.MachineAddress{{
+        // 	Type:    clusterv1.MachineHostName,
+        // 	Address: externalMachine.ContainerName()},
+        // }
+
+        // for _, addr := range machineAddresses {
+        // 	dockerMachine.Status.Addresses = append(dockerMachine.Status.Addresses,
+        // 		clusterv1.MachineAddress{
+        // 			Type:    clusterv1.MachineInternalIP,
+        // 			Address: addr,
+        // 		},
+        // 		clusterv1.MachineAddress{
+        // 			Type:    clusterv1.MachineExternalIP,
+        // 			Address: addr,
+        // 		})
+        // }
+
+        Ok(())
+    }
+
+    pub async fn get_association(&self, ctx: Arc<Context>) -> Result<Association> {
         let machine = match self.get_owner(ctx.clone()).await? {
             Some(machine) => machine,
             None => {
                 info!("Waiting for Machine Controller to set OwnerRef on DockerMachine");
-                return Ok(None);
+                return Err(Error::MachineNotFound);
             }
         };
 
@@ -124,23 +161,28 @@ impl DockerMachine {
             Some(cluster) => cluster,
             None => {
                 info!("DockerCluster is not available yet");
-                return Ok(None);
+                return Err(Error::DockerClusterNotFound);
             }
         };
 
-        Ok(Some(
-            Association::new(cluster, machine, self.spec.custom_image.clone()).await?,
-        ))
+        Association::new(cluster, machine, self.spec.custom_image.clone()).await
     }
 
     pub async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
-        match self.get_association(ctx).await? {
-            Some(association) => self.reconcile_normal(association).await,
-            None => Ok(Action::requeue(Duration::from_secs(5 * 60))),
+        match self.get_association(ctx.clone()).await {
+            Ok(association) => self.reconcile_normal(ctx, association).await,
+            Err(Error::ClusterNotFound) | Err(Error::MachineNotFound) => {
+                Ok(Action::requeue(Duration::from_secs(5 * 60)))
+            }
+            Err(e) => Err(e),
         }
     }
 
-    pub async fn reconcile_normal(&self, association: Association) -> Result<Action> {
+    pub async fn reconcile_normal(
+        &self,
+        ctx: Arc<Context>,
+        association: Association,
+    ) -> Result<Action> {
         let mut status = self.status.clone().unwrap_or_default();
 
         // Check if the infrastructure is ready, otherwise return and wait for the cluster object to be updated
@@ -161,25 +203,24 @@ impl DockerMachine {
         }
 
         match self.spec.provider_id.clone() {
-            Some(_) => status.ready = Some(true),
+            Some(_) => {
+                status.ready = Some(true);
+                self.set_machine_address(ctx.clone()).await?
+            }
             None => (),
         }
-
-        match association.machine.spec.bootstrap.data_secret_name {
-            None => {
-                // // if !util.IsControlPlaneMachine(machine) && !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
-                //     log.Info("Waiting for the control plane to be initialized")
-                //     conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
-                //     return ctrl.Result{}, nil
-                // }
-
-                // log.Info("Waiting for the Bootstrap provider controller to set bootstrap data")
-                // conditions.MarkFalse(dockerMachine, infrav1.ContainerProvisionedCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
+        
+        match association.prepare_bootstrap(ctx).await {
+            Ok(_) => (),
+            Err(Error::BootstrapSecretNotReady) => {
+                return Ok(Action::requeue(Duration::from_secs(5 * 60)))
             }
-            _ => (),
-        }
-
+            Err(e) => return Err(e),
+        };
+        
         association.create().await?;
+
+        // Preload?..
 
         // if the machine is a control plane update the load balancer configuration
         // we should only do this once, as reconfiguration more or less ensures
@@ -201,9 +242,12 @@ impl DockerMachine {
     }
 
     pub async fn cleanup(&self, ctx: Arc<Context>) -> Result<Action> {
-        match self.get_association(ctx).await? {
-            Some(association) => self.reconcile_delete(association).await,
-            None => Ok(Action::requeue(Duration::from_secs(5 * 60))),
+        match self.get_association(ctx).await {
+            Ok(association) => self.reconcile_delete(association).await,
+            Err(Error::ClusterNotFound) | Err(Error::MachineNotFound) => {
+                Ok(Action::requeue(Duration::from_secs(5 * 60)))
+            }
+            Err(e) => Err(e),
         }
     }
 }

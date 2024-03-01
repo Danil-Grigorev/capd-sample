@@ -2,6 +2,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("CRI lookup prerequisites not satisfied, can't connect")]
+    CRIPrerequisitesNotFound,
+
     #[error("SerializationError: {0}")]
     SerializationError(#[source] serde_json::Error),
 
@@ -15,6 +18,12 @@ pub enum Error {
 
     #[error("Owner Machine not found")]
     MachineNotFound,
+
+    #[error("Related cluster not found")]
+    DockerClusterNotFound,
+
+    #[error("Bootstrap data secret not ready")]
+    BootstrapSecretNotReady,
 
     #[error("Please associate this machine with a cluster using the label {CLUSTER_NAME_LABEL}: <name of cluster>")]
     ClusterNotFound,
@@ -36,6 +45,9 @@ pub enum Error {
 
     #[error("Unable to find available port: {0}")]
     PortLookupError(#[source] std::io::Error),
+
+    #[error("Unable to create local bootstrap copy: {0}")]
+    BootsrapPrepareError(#[source] std::io::Error),
 }
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
